@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lab Equipment Borrow</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2f6fed">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Lab Borrow">
+<style>
+  :root{
+    --bg:#fff; --ink:#1a1a1a; --muted:#8a8a8a; --accent:#2f6fed;
+    --line:#ececec; --soft:#f6f7f9; --danger:#e1483a; --ok:#1f9d55; --warn:#c98a00;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--soft); color:var(--ink); line-height:1.5;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .topbar{background:var(--bg); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5}
+  .topbar .inner{max-width:920px; margin:0 auto; padding:12px 16px; display:flex; align-items:center; gap:12px}
+  .brand{font-weight:700; font-size:17px; letter-spacing:-.01em; display:flex; align-items:center; gap:8px}
+  .brand .dot{width:22px;height:22px;border-radius:7px;background:var(--accent);display:inline-flex;align-items:center;justify-content:center;font-size:13px}
+  .spacer{flex:1}
+  .who{font-size:13px; color:var(--muted)}
+  .who b{color:var(--ink)}
+  .wrap{max-width:920px; margin:0 auto; padding:20px 16px 60px}
+  .card{background:var(--bg); border:1px solid var(--line); border-radius:14px;
+    padding:20px; box-shadow:0 1px 3px rgba(0,0,0,.04); margin-bottom:18px}
+  h1{font-size:22px; font-weight:650; margin:0 0 4px; letter-spacing:-.01em}
+  h2{font-size:15px; font-weight:650; margin:0 0 14px}
+  .sub{color:var(--muted); font-size:13px; margin:0 0 18px}
+  label{display:block; font-size:12.5px; color:var(--muted); margin:0 0 4px}
+  input,select,button,textarea{font:inherit; color:inherit}
+  input,select,textarea{width:100%; border:1px solid var(--line); border-radius:9px; padding:9px 11px; background:#fff; outline:none}
+  input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+  button{cursor:pointer; border:none; border-radius:9px; padding:9px 14px; font-weight:600; background:var(--soft); color:var(--ink)}
+  .btn-primary{background:var(--accent); color:#fff}
+  .btn-ok{background:var(--ok); color:#fff}
+  .btn-danger{background:var(--danger); color:#fff}
+  .btn-ghost{background:transparent; color:var(--muted); padding:6px 10px; font-size:13px}
+  .btn-ghost:hover{color:var(--ink)}
+  .btn-sm{padding:6px 10px; font-size:13px}
+  .grid{display:grid; gap:12px}
+  .g2{grid-template-columns:1fr 1fr}
+  .g3{grid-template-columns:1fr 1fr 1fr}
+  .row-end{display:flex; justify-content:flex-end; gap:8px; margin-top:14px}
+  .tabs{display:flex; gap:4px; border-bottom:1px solid var(--line); margin:0 0 18px; flex-wrap:wrap}
+  .tab{background:transparent; border-radius:0; padding:9px 12px; color:var(--muted); border-bottom:2px solid transparent; font-size:14px}
+  .tab.active{color:var(--accent); border-bottom-color:var(--accent)}
+  .tab .count{display:inline-block; min-width:18px; padding:0 5px; margin-left:5px; font-size:11px; line-height:17px;
+    border-radius:9px; background:var(--soft); color:var(--muted); text-align:center}
+  .tab.active .count{background:var(--accent); color:#fff}
+  table{width:100%; border-collapse:collapse; font-size:13.5px}
+  th{text-align:left; font-weight:600; color:var(--muted); font-size:12px; padding:8px 10px; border-bottom:1px solid var(--line)}
+  td{padding:10px; border-bottom:1px solid var(--line); vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  .badge{display:inline-block; font-size:11.5px; font-weight:600; padding:2px 9px; border-radius:20px; white-space:nowrap}
+  .b-avail{background:#e7f6ee; color:var(--ok)}
+  .b-borrow{background:#eaf0fe; color:var(--accent)}
+  .b-maint{background:#fff4e0; color:var(--warn)}
+  .b-retire{background:#f0f0f0; color:var(--muted)}
+  .b-pending{background:#fff4e0; color:var(--warn)}
+  .b-approved{background:#eaf0fe; color:var(--accent)}
+  .b-denied{background:#fdecea; color:var(--danger)}
+  .b-returnreq{background:#f3e8ff; color:#8a3ffc}
+  .b-returned{background:#e7f6ee; color:var(--ok)}
+  .b-late{background:#fdecaa00; color:var(--danger); border:1px solid var(--danger); margin-left:6px}
+  .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:12px}
+  .stat{background:var(--soft); border-radius:11px; padding:14px}
+  .stat .n{font-size:24px; font-weight:700; letter-spacing:-.02em}
+  .stat .l{font-size:12px; color:var(--muted); margin-top:2px}
+  .stat.danger .n{color:var(--danger)}
+  .empty{text-align:center; color:var(--muted); padding:30px 10px; font-size:14px}
+  .tag{display:inline-block; font-size:11px; font-weight:600; padding:1px 8px; border-radius:20px;
+    background:#eef1f6; color:#5a6b8c; margin:1px 4px 1px 0; white-space:nowrap}
+  .filterbar{display:flex; align-items:center; gap:8px; margin:0 0 14px}
+  .filterbar label{margin:0; white-space:nowrap}
+  .filterbar select{width:auto; min-width:170px}
+  .pillrow{display:flex; align-items:flex-start; gap:10px; margin:0 0 12px}
+  .pilllabel{font-size:12px; color:var(--muted); font-weight:600; padding:8px 0; white-space:nowrap; min-width:50px}
+  .tagfilter{display:flex; flex-wrap:wrap; gap:8px}
+  .pillrow .tagfilter{margin:0}
+  .tagfilter.standalone{margin:0 0 16px}
+  .tagbtn{padding:6px 14px; font-size:13px; font-weight:600; border:1px solid transparent; border-radius:20px;
+    cursor:pointer; line-height:1.2; transition:transform .05s}
+  .tagbtn:hover{filter:brightness(.97)}
+  .tagbtn:active{transform:scale(.96)}
+  .tagbtn.on{box-shadow:0 1px 4px rgba(0,0,0,.12)}
+  .tagpick{display:flex; flex-wrap:wrap; gap:6px; margin-top:2px}
+  .tagpick label{display:inline-flex; align-items:center; gap:5px; font-size:13px; color:var(--ink);
+    background:var(--soft); padding:5px 10px; border-radius:8px; cursor:pointer; margin:0}
+  .tagpick input{width:auto; margin:0}
+  .ver{font-size:11px; font-weight:600; color:var(--muted); background:var(--soft);
+    padding:1px 7px; border-radius:20px; vertical-align:middle}
+  .gear{width:16px; height:16px; display:inline-block; vertical-align:middle; animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  button:disabled{opacity:.85; cursor:default}
+  .edit-cell{background:var(--soft)}
+  .strow{cursor:pointer}
+  .strow:hover{background:var(--soft)}
+  .chev{display:inline-block; color:var(--muted); font-size:11px; transition:transform .15s; margin-right:4px}
+  .strow.open .chev{transform:rotate(90deg)}
+  table.inner{margin:0; background:transparent}
+  table.inner td{border-bottom:1px solid var(--line); font-size:13px; padding:8px 10px}
+  table.inner tr:last-child td{border-bottom:none}
+  #status{position:fixed; left:50%; bottom:22px; transform:translateX(-50%); background:#1a1a1a; color:#fff;
+    font-size:13px; padding:9px 16px; border-radius:22px; opacity:0; transition:opacity .2s; pointer-events:none; z-index:20}
+  #status.show{opacity:1}
+  #status.err{background:var(--danger)} #status.ok{background:var(--ok)}
+  .switch{font-size:13px; color:var(--muted); text-align:center; margin-top:14px}
+  .switch a{color:var(--accent); cursor:pointer; font-weight:600}
+  .auth-card{max-width:380px; margin:6vh auto 0}
+  .hint{font-size:11.5px; color:#b0b0b0; text-align:center; margin-top:18px}
+  .actions{display:flex; gap:6px; flex-wrap:wrap}
+  /* wide data tables scroll sideways inside their pane instead of overflowing the phone viewport */
+  #pane{overflow-x:auto; -webkit-overflow-scrolling:touch}
+  @media(max-width:560px){
+    .g2,.g3{grid-template-columns:1fr}
+    .stats{grid-template-columns:1fr 1fr}
+    td,th{padding:8px 6px}
+    .who{display:none}
+    .card{padding:16px}
+    .wrap{padding:16px 12px 48px}
+    .brand{font-size:15px}
+    .filterbar{flex-wrap:wrap}
+    .filterbar select{min-width:0; flex:1}
+    #pane > table{min-width:560px}   /* keep columns legible; pane scrolls */
+    table.inner{min-width:0}
+    #status{left:16px; right:16px; transform:none; text-align:center}
+  }
+</style>
+</head>
+<body>
+  <div class="topbar"><div class="inner">
+    <span class="brand"><span class="dot">🔬</span> Lab Equipment Borrow <span class="ver" id="ver"></span></span>
+    <span class="spacer"></span>
+    <span class="who" id="who"></span>
+    <button class="btn-ghost" id="logoutBtn" hidden>Log out</button>
+  </div></div>
+
+  <div class="wrap" id="app"></div>
+  <div id="status"></div>
+
+<script src="data.js"></script>
+<script>
+(() => {
+  "use strict";
+
+  // ---------- version ----------
+  const APP_VERSION = "2.0";
+  const verEl = document.getElementById("ver");
+  if (verEl) verEl.textContent = "v" + APP_VERSION;
+
+  // ---------- session ----------
+  const SKEY = "lab_session";
+  const getSession = () => { try { return JSON.parse(sessionStorage.getItem(SKEY) || "null"); } catch { return null; } };
+  const setSession = s => sessionStorage.setItem(SKEY, JSON.stringify(s));
+  const clearSession = () => sessionStorage.removeItem(SKEY);
+
+  // ---------- helpers ----------
+  const $app = document.getElementById("app");
+  const $who = document.getElementById("who");
+  const $logout = document.getElementById("logoutBtn");
+  const $status = document.getElementById("status");
+  const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+  const today = () => new Date().toISOString().slice(0,10);
+  // add n days to a yyyy-MM-dd string (UTC math = no timezone day-shift)
+  const addDays = (iso, n) => { const [y,m,d] = String(iso).split("-").map(Number);
+    const dt = new Date(Date.UTC(y, m-1, d)); dt.setUTCDate(dt.getUTCDate()+n); return dt.toISOString().slice(0,10); };
+  const isTrue = v => String(v).toUpperCase() === "TRUE";
+  const overdue = due => due && today() > String(due);
+
+  let toastT;
+  function toast(msg, kind="") {
+    $status.textContent = msg; $status.className = "show " + kind;
+    clearTimeout(toastT);
+    if (kind !== "") toastT = setTimeout(() => $status.className = "", 1600);
+  }
+
+  // ---------- button loading spinner (spinning gear) ----------
+  const GEAR = `<svg class="gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>`;
+  // disable a button + swap its label for a spinning gear while fn() runs (keeps width; blocks double-click)
+  async function withSpin(btn, fn) {
+    if (!btn || btn.dataset.busy) return;
+    btn.dataset.busy = "1";
+    const html = btn.innerHTML, w = btn.offsetWidth;
+    btn.disabled = true; btn.style.minWidth = w + "px"; btn.innerHTML = GEAR;
+    try { return await fn(); }
+    finally { btn.disabled = false; btn.innerHTML = html; btn.style.minWidth = ""; delete btn.dataset.busy; }
+  }
+
+  const DEFAULT_CATEGORIES = ["Microscopy","Measurement","Glassware","Electronics","Safety","Computing","Other"];
+  let categories = DEFAULT_CATEGORIES.slice();   // category names — loaded live from the "categories" sheet
+  const EQ_STATUS = ["Available","Borrowed","Maintenance","Retired"];
+  const TAGS = ["Structure","Soil","Highway","Survey","Hydraulic","Contech","Other"];
+
+  // category dropdown: live list, "Other" always present + last; keeps a legacy/current value selectable
+  const catList = () => { const a = categories.filter(c => String(c).toLowerCase() !== "other"); a.push("Other"); return a; };
+  const catOptions = (sel) => {
+    const list = catList();
+    if (sel && !list.includes(sel)) list.unshift(sel);
+    return list.map(c => `<option ${c===sel?"selected":""}>${esc(c)}</option>`).join("");
+  };
+  // show the "new category" text box only when "Other" is picked
+  const wireNewCat = (sel, input) => { if (!sel || !input) return;
+    const upd = () => { const on = sel.value === "Other"; input.style.display = on ? "" : "none"; if (!on) input.value = ""; };
+    sel.onchange = upd; upd(); };
+  // chosen category; if "Other" + a typed name, persist a new category row to the sheet (dedup case-insensitive)
+  async function resolveCategory(selVal, inputEl) {
+    const typed = inputEl && inputEl.value ? inputEl.value.trim() : "";
+    if (selVal === "Other" && typed) {
+      const found = categories.find(c => c.toLowerCase() === typed.toLowerCase());
+      if (found) return found;
+      const row = { id: Date.now().toString(), name: typed };
+      await DB.categories.create(row); cacheUpsert("categories", row); categories.push(typed);
+      return typed;
+    }
+    return selVal;
+  }
+
+  // tags stored as one comma-separated cell; always >=1 (defaults to "Other")
+  const parseTags = s => { const a = String(s||"").split(",").map(x=>x.trim()).filter(Boolean); return a.length ? a : ["Other"]; };
+  const tagsToStr = arr => (arr && arr.length ? arr : ["Other"]).join(", ");
+  const tagChips = s => parseTags(s).map(t => `<span class="tag">${esc(t)}</span>`).join("");
+  const hasTag = (e, tag) => tag === "All" || parseTags(e.tags).includes(tag);
+  // checkbox tag picker (admin add/edit); checked = the tags currently on the item
+  const tagPicker = (selected) => `<div class="tagpick">${TAGS.map(t =>
+    `<label><input type="checkbox" class="tagbox" value="${t}" ${selected.includes(t)?"checked":""}>${t}</label>`).join("")}</div>`;
+  const readTags = scope => { const a = [...scope.querySelectorAll(".tagbox:checked")].map(c=>c.value); return a.length ? a : ["Other"]; };
+  // colors for the filter toggle pills
+  const TAG_COLORS = { All:"#5a6b8c", Structure:"#e1483a", Soil:"#b5651d", Highway:"#2f6fed",
+    Survey:"#1f9d55", Hydraulic:"#0ea5b7", Contech:"#8a3ffc", Other:"#8a8a8a" };
+  const STATUS_COLORS = { All:"#5a6b8c", Available:"#1f9d55", Borrowed:"#2f6fed",
+    Maintenance:"#c98a00", Retired:"#8a8a8a" };
+
+  const pillBtn = (val, cur, colors) => {
+    const c = colors[val] || "#8a8a8a", on = (val === cur);
+    const style = on ? `background:${c};color:#fff;border-color:${c}` : `background:${c}1a;color:${c};border-color:transparent`;
+    return `<button type="button" class="tagbtn ${on?"on":""}" data-tag="${esc(val)}" style="${style}">${val==="All"?"★ All":esc(val)}</button>`;
+  };
+  // a labelled row of toggle pills (click a value to filter, click active again / ★ All to clear)
+  const pillBar = (id, label, values, cur, colors) =>
+    `<div class="pillrow"><span class="pilllabel">${esc(label)}</span>
+      <div class="tagfilter" id="${id}">${["All",...values].map(v=>pillBtn(v,cur,colors)).join("")}</div></div>`;
+  const tagFilterBar = (id, cur) => pillBar(id, "Tag", TAGS, cur, TAG_COLORS);
+  const statusFilterBar = (id, cur) => pillBar(id, "Status", EQ_STATUS, cur, STATUS_COLORS);
+  // wire a pill bar: clicking sets state via setter then re-renders; active value toggles off to All
+  const wireTagFilter = (id, cur, apply) => {
+    const bar = document.getElementById(id); if (!bar) return;
+    bar.querySelectorAll(".tagbtn").forEach(b => b.onclick = () => {
+      const t = b.dataset.tag;
+      apply(t === cur && t !== "All" ? "All" : t);
+    });
+  };
+
+  const statusBadge = s => {
+    const map = {Available:"b-avail",Borrowed:"b-borrow",Maintenance:"b-maint",Retired:"b-retire",
+      Pending:"b-pending",Approved:"b-approved",Denied:"b-denied",ReturnRequested:"b-returnreq",Returned:"b-returned"};
+    const label = s === "ReturnRequested" ? "Return Requested" : s;
+    return `<span class="badge ${map[s]||""}">${esc(label)}</span>`;
+  };
+
+  // ---------- data cache ----------
+  const cache = { equipment:null, log:null, students:null, categories:null };
+  async function load(name, force=false) {
+    if (!cache[name] || force) cache[name] = (await DB[name].getAll()).filter(r => r && r.id !== "");
+    return cache[name];
+  }
+  const invalidate = (...names) => names.forEach(n => cache[n] = null);
+  // optimistic cache edits — keep memory in sync with a successful write so the
+  // view re-renders instantly without a re-fetch. (On error the handler invalidates instead.)
+  const cacheUpsert = (name, row) => { if (cache[name]) cache[name].push(row); };
+  const cachePatch  = (name, id, fields) => { if (cache[name]) { const it = cache[name].find(r => String(r.id) === String(id)); if (it) Object.assign(it, fields); } };
+  const cacheRemove = (name, id) => { if (cache[name]) cache[name] = cache[name].filter(r => String(r.id) !== String(id)); };
+
+  // ============================================================ AUTH
+  function authView(mode="login") {
+    $who.textContent = ""; $logout.hidden = true;
+    if (mode === "register") return registerView();
+    $app.innerHTML = `
+      <div class="card auth-card">
+        <h1>Sign in</h1>
+        <p class="sub">Enter your ID and password.</p>
+        <form id="f">
+          <div style="margin-bottom:12px"><label>ID</label><input name="student_id" autocomplete="username" required></div>
+          <div style="margin-bottom:4px"><label>Password</label><input name="password" type="password" autocomplete="current-password" required></div>
+          <div class="row-end"><button class="btn-primary" type="submit" style="width:100%">Sign in</button></div>
+        </form>
+        <div class="switch">New student? <a id="toReg">Create an account</a></div>
+      </div>`;
+    document.getElementById("toReg").onclick = () => authView("register");
+    document.getElementById("f").onsubmit = doLogin;
+  }
+
+  function registerView() {
+    $app.innerHTML = `
+      <div class="card auth-card">
+        <h1>Create account</h1>
+        <p class="sub">Register once — your Student ID is your login.</p>
+        <form id="f">
+          <div class="grid g2" style="margin-bottom:12px">
+            <div><label>Student ID</label><input name="student_id" required></div>
+            <div><label>Password</label><input name="password" type="password" required></div>
+          </div>
+          <div style="margin-bottom:12px"><label>Full name</label><input name="name" required></div>
+          <div class="grid g2" style="margin-bottom:12px">
+            <div><label>Telephone</label><input name="tel" required></div>
+            <div><label>Advisor</label><input name="advisor" required></div>
+          </div>
+          <div class="row-end"><button class="btn-primary" type="submit" style="width:100%">Register</button></div>
+        </form>
+        <div class="switch">Already registered? <a id="toLogin">Sign in</a></div>
+      </div>`;
+    document.getElementById("toLogin").onclick = () => authView("login");
+    document.getElementById("f").onsubmit = doRegister;
+  }
+
+  function formData(form) {
+    const o = {}; new FormData(form).forEach((v,k) => o[k] = String(v).trim()); return o;
+  }
+
+  async function doLogin(e) {
+    e.preventDefault();
+    const f = formData(e.target);
+    await withSpin(e.submitter, async () => {
+      try {
+        const students = await load("students", true);
+        const u = students.find(s => String(s.student_id) === f.student_id && String(s.password) === f.password);
+        if (!u) return toast("Wrong ID or password", "err");
+        const role = String(u.role).toLowerCase() === "admin" ? "admin" : "student";
+        setSession({ student_id:String(u.student_id), name:u.name, role });
+        toast("Welcome, " + u.name, "ok"); route();
+      } catch (err) { toast("Login failed — check your connection", "err"); }
+    });
+  }
+
+  async function doRegister(e) {
+    e.preventDefault();
+    const f = formData(e.target);
+    await withSpin(e.submitter, async () => {
+      try {
+        const students = await load("students", true);
+        if (students.some(s => String(s.student_id) === f.student_id)) return toast("Student ID already registered", "err");
+        const row = { id: Date.now().toString(), student_id:f.student_id, password:f.password,
+          name:f.name, tel:f.tel, advisor:f.advisor, role:"student" };
+        await DB.students.create(row); cacheUpsert("students", row);
+        setSession({ student_id:f.student_id, name:f.name, role:"student" });
+        toast("Account created", "ok"); route();
+      } catch (err) { toast("Register failed — check your connection", "err"); }
+    });
+  }
+
+  // ============================================================ STUDENT
+  let studentTab = "borrow";
+  let borrowTag = "All";   // tag filter on the Borrow dropdown
+  let stCatTag = "All";    // tag filter on the student Equipment catalog
+  let stCatStatus = "All"; // status filter on the student Equipment catalog
+  async function studentView() {
+    const s = getSession();
+    const [equipment, log] = await Promise.all([load("equipment"), load("log")]);
+    const mine = log.filter(r => String(r.student_id) === s.student_id);
+    const inHand = mine.filter(r => r.status === "Approved" || r.status === "ReturnRequested");
+
+    const tabs = [["borrow","Borrow"],["catalog","Equipment"],["hand","In hand",inHand.length],["history","History"]];
+    $app.innerHTML = `
+      <div class="card">
+        <h1>Hi, ${esc(s.name)}</h1>
+        <p class="sub">Student ID ${esc(s.student_id)} · request equipment and track what you hold.</p>
+        ${statBlock(mine)}
+      </div>
+      <div class="card">
+        <div class="tabs">${tabs.map(t =>
+          `<button class="tab ${studentTab===t[0]?"active":""}" data-t="${t[0]}">${t[1]}${t[2]?`<span class="count">${t[2]}</span>`:""}</button>`).join("")}</div>
+        <div id="pane"></div>
+      </div>`;
+    $app.querySelectorAll(".tab").forEach(b => b.onclick = () => { studentTab = b.dataset.t; studentPane(equipment, mine, inHand); });
+    studentPane(equipment, mine, inHand);
+  }
+
+  function statBlock(mine) {
+    const borrow = mine.filter(r => ["Approved","ReturnRequested","Returned"].includes(r.status)).length;
+    const returned = mine.filter(r => r.status === "Returned").length;
+    const late = mine.filter(r => isTrue(r.late) || (r.status!=="Returned" && overdue(r.return_date))).length;
+    const holding = mine.filter(r => r.status === "Approved" || r.status === "ReturnRequested").length;
+    return `<div class="stats">
+      <div class="stat"><div class="n">${holding}</div><div class="l">In hand now</div></div>
+      <div class="stat"><div class="n">${borrow}</div><div class="l">Total borrowed</div></div>
+      <div class="stat"><div class="n">${returned}</div><div class="l">Returned</div></div>
+      <div class="stat ${late?"danger":""}"><div class="n">${late}</div><div class="l">Late</div></div>
+    </div>`;
+  }
+
+  function studentPane(equipment, mine, inHand) {
+    $app.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.t === studentTab));
+    const pane = document.getElementById("pane");
+    if (studentTab === "borrow") {
+      const avail = equipment.filter(e => e.status === "Available" && hasTag(e, borrowTag));
+      pane.innerHTML = `
+        <h2>New borrow request</h2>
+        ${tagFilterBar("bTag", borrowTag)}
+        ${avail.length === 0 ? `<div class="empty">No available equipment${borrowTag!=="All"?` tagged "${esc(borrowTag)}"`:""} right now.</div>` : `
+        <form id="bf">
+          <div style="margin-bottom:12px"><label>Equipment</label>
+            <select name="equipment_id" required>${avail.map(e =>
+              `<option value="${esc(e.id)}">${esc(e.name)}${e.code?` · ${esc(e.code)}`:""} (${esc(e.category)}) — ${esc(parseTags(e.tags).join(", "))}</option>`).join("")}</select></div>
+          <div class="grid g2" style="margin-bottom:4px">
+            <div><label>Borrow date</label><input type="date" name="borrow_date" value="${today()}" min="${today()}" required></div>
+            <div><label>Return by</label><input type="date" name="return_date" value="${addDays(today(),1)}" min="${addDays(today(),1)}" required></div>
+          </div>
+          <div class="row-end"><button class="btn-primary" type="submit">Submit request</button></div>
+        </form>`}
+        <p class="hint" style="text-align:left">Requests start as <b>Pending</b> until an admin approves them.</p>`;
+      wireTagFilter("bTag", borrowTag, t => { borrowTag = t; studentPane(equipment, mine, inHand); });
+      const bf = document.getElementById("bf");
+      if (bf) {
+        bf.onsubmit = ev => submitBorrow(ev, equipment);
+        const bd = bf.querySelector('[name="borrow_date"]'), rd = bf.querySelector('[name="return_date"]');
+        bd.onchange = () => { const next = addDays(bd.value || today(), 1); rd.value = next; rd.min = next; };
+      }
+    } else if (studentTab === "hand") {
+      pane.innerHTML = inHand.length === 0 ? `<div class="empty">Nothing in hand. Borrow something from the Borrow tab.</div>` : `
+        <table><thead><tr><th>Equipment</th><th>Borrowed</th><th>Due</th><th>Status</th><th></th></tr></thead><tbody>
+        ${inHand.map(r => `<tr>
+          <td><b>${esc(r.equipment_name)}</b></td>
+          <td>${esc(r.borrow_date)}</td>
+          <td>${esc(r.return_date)}${overdue(r.return_date)?` <span class="badge b-late">overdue</span>`:""}</td>
+          <td>${statusBadge(r.status)}</td>
+          <td class="actions">${r.status==="Approved"
+            ? `<button class="btn-primary btn-sm" data-ret="${esc(r.id)}">Request return</button>`
+            : `<span class="who" style="display:inline">awaiting admin</span>`}</td>
+        </tr>`).join("")}</tbody></table>`;
+      pane.querySelectorAll("[data-ret]").forEach(b => b.onclick = () => withSpin(b, () => requestReturn(b.dataset.ret)));
+    } else if (studentTab === "catalog") {
+      const filtered = stCatTag !== "All" || stCatStatus !== "All";
+      const list = equipment.filter(e => hasTag(e, stCatTag) && (stCatStatus === "All" || e.status === stCatStatus));
+      pane.innerHTML = `
+        <h2>Equipment catalog (${list.length}${filtered?` / ${equipment.length}`:""})</h2>
+        ${tagFilterBar("stCat", stCatTag)}
+        ${statusFilterBar("stStat", stCatStatus)}
+        ${list.length === 0 ? `<div class="empty">No equipment matches the selected filters.</div>` : `
+        <table><thead><tr><th>Name</th><th>Code</th><th>Category</th><th>Tags</th><th>Status</th></tr></thead><tbody>
+        ${list.map(e => `<tr>
+          <td><b>${esc(e.name)}</b>${e.notes?`<br><span class="who" style="display:inline">${esc(e.notes)}</span>`:""}</td>
+          <td>${esc(e.code)||"—"}</td><td>${esc(e.category)}</td><td>${tagChips(e.tags)}</td><td>${statusBadge(e.status)}</td>
+        </tr>`).join("")}</tbody></table>`}
+        <p class="hint" style="text-align:left">View only — only available items can be borrowed from the Borrow tab.</p>`;
+      wireTagFilter("stCat", stCatTag, t => { stCatTag = t; studentPane(equipment, mine, inHand); });
+      wireTagFilter("stStat", stCatStatus, t => { stCatStatus = t; studentPane(equipment, mine, inHand); });
+    } else {
+      const rows = [...mine].sort((a,b) => String(b.request_date).localeCompare(String(a.request_date)));
+      pane.innerHTML = rows.length === 0 ? `<div class="empty">No history yet.</div>` : `
+        <table><thead><tr><th>Equipment</th><th>Requested</th><th>Due</th><th>Returned</th><th>Status</th></tr></thead><tbody>
+        ${rows.map(r => `<tr>
+          <td><b>${esc(r.equipment_name)}</b></td>
+          <td>${esc(r.request_date)}</td>
+          <td>${esc(r.return_date)}</td>
+          <td>${esc(r.actual_return_date) || "—"}</td>
+          <td>${statusBadge(r.status)}${isTrue(r.late)?`<span class="badge b-late">late</span>`:""}</td>
+        </tr>`).join("")}</tbody></table>`;
+    }
+  }
+
+  async function submitBorrow(e, equipment) {
+    e.preventDefault();
+    const f = formData(e.target);
+    if (f.return_date < f.borrow_date) return toast("Return date is before borrow date", "err");
+    const s = getSession();
+    const eq = equipment.find(x => String(x.id) === f.equipment_id);
+    const row = { id: Date.now().toString(), student_id:s.student_id, student_name:s.name,
+      equipment_id:f.equipment_id, equipment_name: eq ? eq.name : "",
+      borrow_date:f.borrow_date, return_date:f.return_date, request_date:today(),
+      status:"Pending", approved_by:"", actual_return_date:"", late:"FALSE" };
+    await withSpin(e.submitter, async () => {
+      try { await DB.log.create(row); cacheUpsert("log", row); toast("Request submitted", "ok"); studentView(); }
+      catch (err) { invalidate("log"); toast("Submit failed", "err"); studentView(); }
+    });
+  }
+
+  async function requestReturn(id) {
+    try { await DB.log.update(id, { status:"ReturnRequested" }); cachePatch("log", id, { status:"ReturnRequested" });
+      toast("Return requested — awaiting admin", "ok"); studentView(); }
+    catch (err) { invalidate("log"); toast("Failed", "err"); studentView(); }
+  }
+
+  // ============================================================ ADMIN
+  let adminTab = "pending";
+  let adCatTag = "All";    // tag filter on the admin equipment catalog
+  let adCatStatus = "All"; // status filter on the admin equipment catalog
+  async function adminView() {
+    const s = getSession();
+    const [equipment, log, students] = await Promise.all([load("equipment"), load("log"), load("students")]);
+    // categories load is non-fatal: if the sheet isn't there yet, fall back to defaults
+    try { const cats = await load("categories"); categories = cats.map(c => String(c.name)).filter(Boolean); }
+    catch { categories = DEFAULT_CATEGORIES.slice(); }
+    if (!categories.length) categories = DEFAULT_CATEGORIES.slice();
+    const pending = log.filter(r => r.status === "Pending");
+    const returns = log.filter(r => r.status === "ReturnRequested");
+    const tabs = [["pending","Requests",pending.length],["returns","Returns",returns.length],
+      ["equipment","Equipment"],["students","Students"]];
+    $app.innerHTML = `
+      <div class="card">
+        <h1>Admin console</h1>
+        <p class="sub">Review borrow requests, approve returns, manage the equipment catalog.</p>
+        <div class="stats">
+          <div class="stat"><div class="n">${equipment.filter(e=>e.status==="Available").length}</div><div class="l">Available</div></div>
+          <div class="stat"><div class="n">${equipment.filter(e=>e.status==="Borrowed").length}</div><div class="l">Out on loan</div></div>
+          <div class="stat ${pending.length?"danger":""}"><div class="n">${pending.length}</div><div class="l">Pending</div></div>
+          <div class="stat"><div class="n">${returns.length}</div><div class="l">Return reqs</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="tabs">${tabs.map(t =>
+          `<button class="tab ${adminTab===t[0]?"active":""}" data-t="${t[0]}">${t[1]}${t[2]?`<span class="count">${t[2]}</span>`:""}</button>`).join("")}</div>
+        <div id="pane"></div>
+      </div>`;
+    $app.querySelectorAll(".tab").forEach(b => b.onclick = () => { adminTab = b.dataset.t; adminPane(equipment, log, students, pending, returns); });
+    adminPane(equipment, log, students, pending, returns);
+  }
+
+  function adminPane(equipment, log, students, pending, returns) {
+    $app.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.t === adminTab));
+    const pane = document.getElementById("pane");
+    if (adminTab === "pending") {
+      pane.innerHTML = pending.length === 0 ? `<div class="empty">No pending requests. 🎉</div>` : `
+        <table><thead><tr><th>Student</th><th>Equipment</th><th>Borrow</th><th>Return by</th><th>Actions</th></tr></thead><tbody>
+        ${pending.map(r => `<tr>
+          <td><b>${esc(r.student_name)}</b><br><span class="who" style="display:inline">${esc(r.student_id)}</span></td>
+          <td>${esc(r.equipment_name)}</td><td>${esc(r.borrow_date)}</td><td>${esc(r.return_date)}</td>
+          <td class="actions">
+            <button class="btn-ok btn-sm" data-app="${esc(r.id)}" data-eq="${esc(r.equipment_id)}">Approve</button>
+            <button class="btn-danger btn-sm" data-deny="${esc(r.id)}">Deny</button></td>
+        </tr>`).join("")}</tbody></table>`;
+      pane.querySelectorAll("[data-app]").forEach(b => b.onclick = () => withSpin(b, () => approveBorrow(b.dataset.app, b.dataset.eq)));
+      pane.querySelectorAll("[data-deny]").forEach(b => b.onclick = () => withSpin(b, () => denyBorrow(b.dataset.deny)));
+    } else if (adminTab === "returns") {
+      pane.innerHTML = returns.length === 0 ? `<div class="empty">No return requests.</div>` : `
+        <table><thead><tr><th>Student</th><th>Equipment</th><th>Due</th><th>Actions</th></tr></thead><tbody>
+        ${returns.map(r => `<tr>
+          <td><b>${esc(r.student_name)}</b></td><td>${esc(r.equipment_name)}</td>
+          <td>${esc(r.return_date)}${overdue(r.return_date)?` <span class="badge b-late">overdue</span>`:""}</td>
+          <td class="actions"><button class="btn-ok btn-sm" data-rok="${esc(r.id)}" data-eq="${esc(r.equipment_id)}" data-due="${esc(r.return_date)}">Approve return</button></td>
+        </tr>`).join("")}</tbody></table>`;
+      pane.querySelectorAll("[data-rok]").forEach(b => b.onclick = () => withSpin(b, () => approveReturn(b.dataset.rok, b.dataset.eq, b.dataset.due)));
+    } else if (adminTab === "equipment") {
+      const adFiltered = adCatTag !== "All" || adCatStatus !== "All";
+      const list = equipment.filter(e => hasTag(e, adCatTag) && (adCatStatus === "All" || e.status === adCatStatus));
+      // who currently holds each item (Approved or return-pending log row)
+      const holder = {};
+      log.forEach(r => { if (r.status === "Approved" || r.status === "ReturnRequested") holder[String(r.equipment_id)] = r.student_name; });
+      pane.innerHTML = `
+        <h2>Add equipment</h2>
+        <form id="ef">
+          <div class="grid g2" style="margin-bottom:12px">
+            <div><label>Name</label><input name="name" required></div>
+            <div><label>Asset code</label><input name="code" placeholder="e.g. MIC-001"></div>
+          </div>
+          <div class="grid g3" style="margin-bottom:12px">
+            <div><label>Category</label><select name="category" id="ef_cat">${catOptions("")}</select>
+              <input id="ef_newcat" placeholder="New category name" style="display:none;margin-top:6px"></div>
+            <div><label>Status</label><select name="status">${EQ_STATUS.map(c=>`<option>${c}</option>`).join("")}</select></div>
+            <div><label>Notes</label><input name="notes"></div>
+          </div>
+          <div style="margin-bottom:12px"><label>Tags (pick one or more · defaults to Other)</label>${tagPicker([])}</div>
+          <div class="row-end"><button class="btn-primary" type="submit">Add to catalog</button></div>
+        </form>
+        <h2 style="margin-top:8px">Catalog (${list.length}${adFiltered?` / ${equipment.length}`:""})</h2>
+        ${tagFilterBar("adCat", adCatTag)}
+        ${statusFilterBar("adStat", adCatStatus)}
+        ${list.length === 0 ? `<div class="empty">No equipment matches the selected filters.</div>` : `
+        <table><thead><tr><th>Name</th><th>Code</th><th>Category</th><th>Tags</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+        ${list.map(e => `<tr data-id="${esc(e.id)}">
+          <td><b>${esc(e.name)}</b></td><td>${esc(e.code)||"—"}</td><td>${esc(e.category)}</td>
+          <td>${tagChips(e.tags)}</td>
+          <td>${statusBadge(e.status)}${e.status==="Borrowed" && holder[String(e.id)] ? `<div class="who" style="display:block;margin-top:3px">${esc(holder[String(e.id)])}</div>` : ""}</td>
+          <td class="actions">
+            <button class="btn-sm" data-edit="${esc(e.id)}">Edit</button>
+            <button class="btn-danger btn-sm" data-del="${esc(e.id)}">Delete</button></td>
+        </tr>`).join("")}</tbody></table>`}`;
+      document.getElementById("ef").onsubmit = addEquipment;
+      wireNewCat(document.getElementById("ef_cat"), document.getElementById("ef_newcat"));
+      wireTagFilter("adCat", adCatTag, t => { adCatTag = t; adminPane(equipment, log, students, pending, returns); });
+      wireTagFilter("adStat", adCatStatus, t => { adCatStatus = t; adminPane(equipment, log, students, pending, returns); });
+      pane.querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
+        if (!confirm("Delete this equipment from the catalog?")) return;
+        withSpin(b, () => deleteEquipment(b.dataset.del));
+      });
+      pane.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => editEquipmentRow(b.dataset.edit, equipment));
+    } else {
+      pane.innerHTML = students.length === 0 ? `<div class="empty">No students registered.</div>` : `
+        <p class="sub" style="margin-bottom:12px">Click a student to see the equipment they currently hold.</p>
+        <table><thead><tr><th>Student ID</th><th>Name</th><th>Tel</th><th>Advisor</th><th>In hand</th></tr></thead><tbody>
+        ${students.map(st => {
+          const held = log.filter(r => String(r.student_id)===String(st.student_id) && (r.status==="Approved"||r.status==="ReturnRequested"));
+          const sid = esc(st.student_id);
+          const detail = held.length === 0
+            ? `<div class="empty" style="padding:14px">No equipment in hand.</div>`
+            : `<table class="inner"><tbody>${held.map(r => `<tr>
+                  <td><b>${esc(r.equipment_name)}</b></td>
+                  <td>Borrowed ${esc(r.borrow_date)}</td>
+                  <td>Due ${esc(r.return_date)}${overdue(r.return_date)?` <span class="badge b-late">overdue</span>`:""}</td>
+                  <td>${statusBadge(r.status)}</td></tr>`).join("")}</tbody></table>`;
+          return `<tr class="strow" data-sid="${sid}">
+              <td><span class="chev">▸</span> ${sid}</td>
+              <td><b>${esc(st.name)}</b></td><td>${esc(st.tel)}</td><td>${esc(st.advisor)}</td>
+              <td>${held.length}</td></tr>
+            <tr class="detail" data-sid="${sid}" hidden><td colspan="5" class="edit-cell">${detail}</td></tr>`;
+        }).join("")}
+        </tbody></table>`;
+      pane.querySelectorAll(".strow").forEach(row => row.onclick = () => {
+        const det = pane.querySelector(`tr.detail[data-sid="${CSS.escape(row.dataset.sid)}"]`);
+        if (!det) return;
+        det.hidden = !det.hidden;
+        row.classList.toggle("open", !det.hidden);
+      });
+    }
+  }
+
+  async function approveBorrow(logId, eqId) {
+    try {
+      await Promise.all([
+        DB.log.update(logId, { status:"Approved", approved_by:"admin" }),
+        DB.equipment.update(eqId, { status:"Borrowed" })
+      ]);
+      cachePatch("log", logId, { status:"Approved", approved_by:"admin" });
+      cachePatch("equipment", eqId, { status:"Borrowed" });
+      toast("Approved", "ok"); adminView();
+    } catch (err) { invalidate("log","equipment"); toast("Approve failed", "err"); adminView(); }
+  }
+  async function denyBorrow(logId) {
+    try { await DB.log.update(logId, { status:"Denied" }); cachePatch("log", logId, { status:"Denied" });
+      toast("Denied", "ok"); adminView(); }
+    catch (err) { invalidate("log"); toast("Failed", "err"); adminView(); }
+  }
+  async function approveReturn(logId, eqId, due) {
+    const late = (due && today() > String(due)) ? "TRUE" : "FALSE";
+    try {
+      await Promise.all([
+        DB.log.update(logId, { status:"Returned", actual_return_date:today(), late }),
+        DB.equipment.update(eqId, { status:"Available" })
+      ]);
+      cachePatch("log", logId, { status:"Returned", actual_return_date:today(), late });
+      cachePatch("equipment", eqId, { status:"Available" });
+      toast(late==="TRUE"?"Returned (late)":"Returned", "ok"); adminView();
+    } catch (err) { invalidate("log","equipment"); toast("Failed", "err"); adminView(); }
+  }
+  async function addEquipment(e) {
+    e.preventDefault();
+    const f = formData(e.target);
+    await withSpin(e.submitter, async () => {
+      try {
+        const category = await resolveCategory(f.category, e.target.querySelector("#ef_newcat"));
+        const row = { id: Date.now().toString(), name:f.name, code:f.code, category,
+          status:f.status, notes:f.notes, tags: tagsToStr(readTags(e.target)) };
+        await DB.equipment.create(row); cacheUpsert("equipment", row); toast("Added", "ok"); adminView();
+      } catch (err) { invalidate("equipment"); toast("Add failed", "err"); adminView(); }
+    });
+  }
+
+  // inline full-row editor (name, code, category, status, notes, tags)
+  function editEquipmentRow(id, equipment) {
+    const e = equipment.find(x => String(x.id) === String(id)); if (!e) return;
+    const tr = document.querySelector(`tr[data-id="${id}"]`); if (!tr) return;
+    tr.innerHTML = `<td colspan="6" class="edit-cell">
+      <div class="grid g2" style="margin-bottom:10px">
+        <div><label>Name</label><input id="e_name" value="${esc(e.name)}"></div>
+        <div><label>Asset code</label><input id="e_code" value="${esc(e.code)}"></div>
+      </div>
+      <div class="grid g3" style="margin-bottom:10px">
+        <div><label>Category</label><select id="e_cat">${catOptions(e.category)}</select>
+          <input id="e_newcat" placeholder="New category name" style="display:none;margin-top:6px"></div>
+        <div><label>Status</label><select id="e_status">${EQ_STATUS.map(c=>`<option ${c===e.status?"selected":""}>${c}</option>`).join("")}</select></div>
+        <div><label>Notes</label><input id="e_notes" value="${esc(e.notes)}"></div>
+      </div>
+      <div style="margin-bottom:10px"><label>Tags</label>${tagPicker(parseTags(e.tags))}</div>
+      <div class="row-end"><button class="btn-primary btn-sm" id="e_save">Save</button>
+        <button class="btn-ghost btn-sm" id="e_cancel">Cancel</button></div></td>`;
+    const saveBtn = tr.querySelector("#e_save");
+    wireNewCat(tr.querySelector("#e_cat"), tr.querySelector("#e_newcat"));
+    tr.querySelector("#e_cancel").onclick = () => adminView();
+    saveBtn.onclick = () => withSpin(saveBtn, async () => {
+      const category = await resolveCategory(tr.querySelector("#e_cat").value, tr.querySelector("#e_newcat"));
+      const fields = {
+        name: tr.querySelector("#e_name").value.trim(),
+        code: tr.querySelector("#e_code").value.trim(),
+        category,
+        status: tr.querySelector("#e_status").value,
+        notes: tr.querySelector("#e_notes").value.trim(),
+        tags: tagsToStr(readTags(tr)),
+      };
+      if (!fields.name) return toast("Name is required", "err");
+      try { await DB.equipment.update(id, fields); cachePatch("equipment", id, fields); toast("Saved", "ok"); adminView(); }
+      catch (err) { invalidate("equipment"); toast("Save failed", "err"); adminView(); }
+    });
+  }
+  async function deleteEquipment(id) {
+    try { await DB.equipment.remove(id); cacheRemove("equipment", id); toast("Deleted", "ok"); adminView(); }
+    catch (err) { invalidate("equipment"); toast("Delete failed", "err"); adminView(); }
+  }
+
+  // ============================================================ ROUTER
+  function route() {
+    const s = getSession();
+    if (!s) return authView("login");
+    $who.innerHTML = `<b>${esc(s.name)}</b> · ${s.role === "admin" ? "Admin" : "Student"}`;
+    $logout.hidden = false;
+    (s.role === "admin" ? adminView : studentView)().catch(() => toast("Could not load — is serve.py running?", "err"));
+  }
+
+  $logout.onclick = () => { clearSession(); invalidate("equipment","log","students","categories"); route(); };
+  route();
+
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+    window.addEventListener("load", () => navigator.serviceWorker.register("service-worker.js").catch(()=>{}));
+  }
+})();
+</script>
+</body>
+</html>
