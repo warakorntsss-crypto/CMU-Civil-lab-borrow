@@ -52,6 +52,8 @@
   .tab .count{display:inline-block; min-width:18px; padding:0 5px; margin-left:5px; font-size:11px; line-height:17px;
     border-radius:9px; background:var(--soft); color:var(--muted); text-align:center}
   .tab.active .count{background:var(--accent); color:#fff}
+  .tab.refresh{margin-left:auto; color:var(--accent); font-weight:600; border-bottom:none}
+  .tab.refresh:hover{color:var(--ink)}
   table{width:100%; border-collapse:collapse; font-size:13.5px}
   th{text-align:left; font-weight:600; color:var(--muted); font-size:12px; padding:8px 10px; border-bottom:1px solid var(--line)}
   td{padding:10px; border-bottom:1px solid var(--line); vertical-align:middle}
@@ -372,10 +374,14 @@
       </div>
       <div class="card">
         <div class="tabs">${tabs.map(t =>
-          `<button class="tab ${studentTab===t[0]?"active":""}" data-t="${t[0]}">${t[1]}${t[2]?`<span class="count">${t[2]}</span>`:""}</button>`).join("")}</div>
+          `<button class="tab ${studentTab===t[0]?"active":""}" data-t="${t[0]}">${t[1]}${t[2]?`<span class="count">${t[2]}</span>`:""}</button>`).join("")}
+          <button class="tab refresh" id="refreshBtn" title="Reload latest data">↻ Refresh</button></div>
         <div id="pane"></div>
       </div>`;
-    $app.querySelectorAll(".tab").forEach(b => b.onclick = () => { studentTab = b.dataset.t; studentPane(equipment, mine, inHand); });
+    $app.querySelectorAll(".tab[data-t]").forEach(b => b.onclick = () => { studentTab = b.dataset.t; studentPane(equipment, mine, inHand); });
+    document.getElementById("refreshBtn").onclick = e => withSpin(e.currentTarget, async () => {
+      invalidate("equipment","log"); await studentView(); toast("Refreshed", "ok");
+    });
     studentPane(equipment, mine, inHand);
   }
 
@@ -512,10 +518,14 @@
       </div>
       <div class="card">
         <div class="tabs">${tabs.map(t =>
-          `<button class="tab ${adminTab===t[0]?"active":""}" data-t="${t[0]}">${t[1]}${t[2]?`<span class="count">${t[2]}</span>`:""}</button>`).join("")}</div>
+          `<button class="tab ${adminTab===t[0]?"active":""}" data-t="${t[0]}">${t[1]}${t[2]?`<span class="count">${t[2]}</span>`:""}</button>`).join("")}
+          <button class="tab refresh" id="refreshBtn" title="Reload latest data">↻ Refresh</button></div>
         <div id="pane"></div>
       </div>`;
-    $app.querySelectorAll(".tab").forEach(b => b.onclick = () => { adminTab = b.dataset.t; adminPane(equipment, log, students, pending, returns); });
+    $app.querySelectorAll(".tab[data-t]").forEach(b => b.onclick = () => { adminTab = b.dataset.t; adminPane(equipment, log, students, pending, returns); });
+    document.getElementById("refreshBtn").onclick = e => withSpin(e.currentTarget, async () => {
+      invalidate("equipment","log","students","categories"); await adminView(); toast("Refreshed", "ok");
+    });
     adminPane(equipment, log, students, pending, returns);
   }
 
