@@ -68,6 +68,9 @@
   .b-denied{background:#fdecea; color:var(--danger)}
   .b-returnreq{background:#f3e8ff; color:#8a3ffc}
   .b-returned{background:#e7f6ee; color:var(--ok)}
+  .b-reserved{background:#f3e8ff; color:#8a3ffc}
+  .resv-ico{cursor:pointer; margin-left:6px; font-size:12px; vertical-align:middle}
+  .resv-ico:hover{filter:brightness(.95)}
   .b-late{background:#fdecaa00; color:var(--danger); border:1px solid var(--danger); margin-left:6px}
   .stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px}
   .stat{background:var(--soft); border-radius:11px; padding:14px}
@@ -167,7 +170,7 @@
   "use strict";
 
   // ---------- version ----------
-  const APP_VERSION = "2.3";
+  const APP_VERSION = "2.4";
   const verEl = document.getElementById("ver");
   if (verEl) verEl.textContent = "v" + APP_VERSION;
 
@@ -189,6 +192,18 @@
     const dt = new Date(Date.UTC(y, m-1, d)); dt.setUTCDate(dt.getUTCDate()+n); return dt.toISOString().slice(0,10); };
   const isTrue = v => String(v).toUpperCase() === "TRUE";
   const overdue = due => due && today() > String(due);
+
+  // ---------- reservations / bookings ----------
+  const ACTIVE_BOOK = ["Reserved","Pending","Approved","ReturnRequested"];  // commitments that hold a time-slot
+  // two yyyy-MM-dd ranges clash if they touch at all (inclusive, so a shared boundary day counts)
+  const periodsOverlap = (b1,r1,b2,r2) => String(b1) <= String(r2) && String(b2) <= String(r1);
+  // active bookings on one equipment id, earliest first
+  const bookingsFor = (log, eqId) => log
+    .filter(r => String(r.equipment_id) === String(eqId) && ACTIVE_BOOK.includes(r.status))
+    .sort((a,b) => String(a.borrow_date).localeCompare(String(b.borrow_date)));
+  // does this item have a future-dated Reserved hold?
+  const hasFutureRes = (log, eqId) => log.some(r => String(r.equipment_id) === String(eqId)
+    && r.status === "Reserved" && String(r.borrow_date) > today());
 
   let toastT;
   function toast(msg, kind="") {
@@ -317,7 +332,8 @@
 
   const statusBadge = s => {
     const map = {Available:"b-avail",Borrowed:"b-borrow",Maintenance:"b-maint",Retired:"b-retire",
-      Pending:"b-pending",Approved:"b-approved",Denied:"b-denied",ReturnRequested:"b-returnreq",Returned:"b-returned"};
+      Pending:"b-pending",Approved:"b-approved",Denied:"b-denied",ReturnRequested:"b-returnreq",Returned:"b-returned",
+      Reserved:"b-reserved",Revoked:"b-retire",Cancelled:"b-retire"};
     const label = s === "ReturnRequested" ? "Return Requested" : s;
     return `<span class="badge ${map[s]||""}">${esc(label)}</span>`;
   };
@@ -434,8 +450,10 @@
     const [equipment, log] = await Promise.all([load("equipment"), load("log")]);
     const mine = log.filter(r => String(r.student_id) === s.student_id);
     const inHand = mine.filter(r => r.status === "Approved" || r.status === "ReturnRequested");
+    const myResv = mine.filter(r => r.status === "Reserved");
 
-    const tabs = [["borrow","Borrow"],["catalog","Equipment"],["hand","In hand",inHand.length],["history","History"]];
+    const tabs = [["borrow","Borrow"],["catalog","Equipment"],["hand","In hand",inHand.length],
+      ["reserved","Reserved",myResv.length],["history","History"]];
     $app.innerHTML = `
       <div class="card">
         <h1>Hi, ${esc(s.name)}</h1>
@@ -448,11 +466,11 @@
           <button class="tab refresh" id="refreshBtn" title="Reload latest data">↻ Refresh</button></div>
         <div id="pane"></div>
       </div>`;
-    $app.querySelectorAll(".tab[data-t]").forEach(b => b.onclick = () => { studentTab = b.dataset.t; studentPane(equipment, mine, inHand); });
+    $app.querySelectorAll(".tab[data-t]").forEach(b => b.onclick = () => { studentTab = b.dataset.t; studentPane(equipment, log, mine, inHand); });
     document.getElementById("refreshBtn").onclick = e => withSpin(e.currentTarget, async () => {
       invalidate("equipment","log"); await studentView(); toast("Refreshed", "ok");
     });
-    studentPane(equipment, mine, inHand);
+    studentPane(equipment, log, mine, inHand);
   }
 
   function statBlock(mine) {
@@ -468,30 +486,31 @@
     </div>`;
   }
 
-  function studentPane(equipment, mine, inHand) {
+  function studentPane(equipment, log, mine, inHand) {
     $app.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.t === studentTab));
     const pane = document.getElementById("pane");
     if (studentTab === "borrow") {
-      const avail = equipment.filter(e => e.status === "Available" && hasTag(e, borrowTag));
+      // loanable = free now OR out now (out ones are reserve-only for a future window)
+      const loanable = equipment.filter(e => (e.status === "Available" || e.status === "Borrowed") && hasTag(e, borrowTag));
       pane.innerHTML = `
-        <h2>New borrow request</h2>
+        <h2>New borrow / reservation</h2>
         ${tagFilterBar("bTag", borrowTag)}
-        ${avail.length === 0 ? `<div class="empty">No available equipment${borrowTag!=="All"?` tagged "${esc(borrowTag)}"`:""} right now.</div>` : `
+        ${loanable.length === 0 ? `<div class="empty">No equipment${borrowTag!=="All"?` tagged "${esc(borrowTag)}"`:""} to borrow or reserve.</div>` : `
         <form id="bf">
           <div style="margin-bottom:12px"><label>Equipment</label>
-            <select name="equipment_id" required>${avail.map(e =>
-              `<option value="${esc(e.id)}">${esc(e.name)}${e.code?` · ${esc(e.code)}`:""} (${esc(e.category)}) — ${esc(parseTags(e.tags).join(", "))}</option>`).join("")}</select></div>
+            <select name="equipment_id" required>${loanable.map(e =>
+              `<option value="${esc(e.id)}">${esc(e.name)}${e.code?` · ${esc(e.code)}`:""} (${esc(e.category)}) — ${esc(parseTags(e.tags).join(", "))} [${esc(e.status)}]</option>`).join("")}</select></div>
           <div class="grid g2" style="margin-bottom:4px">
             <div><label>Borrow date</label><input type="date" name="borrow_date" value="${today()}" min="${today()}" required></div>
             <div><label>Return by</label><input type="date" name="return_date" value="${addDays(today(),1)}" min="${addDays(today(),1)}" required></div>
           </div>
-          <div class="row-end"><button class="btn-primary" type="submit">Submit request</button></div>
+          <div class="row-end"><button class="btn-primary" type="submit">Submit</button></div>
         </form>`}
-        <p class="hint" style="text-align:left">Requests start as <b>Pending</b> until an admin approves them.</p>`;
-      wireTagFilter("bTag", borrowTag, t => { borrowTag = t; studentPane(equipment, mine, inHand); });
+        <p class="hint" style="text-align:left">Pick <b>today</b> to borrow now (starts <b>Pending</b> for approval). Pick a <b>future date</b> to <b>Reserve</b> — it auto-requests on that day. Overlapping dates are blocked.</p>`;
+      wireTagFilter("bTag", borrowTag, t => { borrowTag = t; studentPane(equipment, log, mine, inHand); });
       const bf = document.getElementById("bf");
       if (bf) {
-        bf.onsubmit = ev => submitBorrow(ev, equipment);
+        bf.onsubmit = ev => submitBorrow(ev, equipment, log);
         const bd = bf.querySelector('[name="borrow_date"]'), rd = bf.querySelector('[name="return_date"]');
         bd.onchange = () => { const next = addDays(bd.value || today(), 1); rd.value = next; rd.min = next; };
       }
@@ -519,11 +538,29 @@
         <table><thead><tr><th>Name</th><th>Code</th><th>Category</th><th>Tags</th><th>Status</th></tr></thead><tbody>
         ${list.map(e => `<tr>
           <td><b>${esc(e.name)}</b>${e.notes?`<br><span class="who" style="display:inline">${esc(e.notes)}</span>`:""}</td>
-          <td>${esc(e.code)||"—"}</td><td>${esc(e.category)}</td><td>${tagChips(e.tags)}</td><td>${statusBadge(e.status)}</td>
+          <td>${esc(e.code)||"—"}</td><td>${esc(e.category)}</td><td>${tagChips(e.tags)}</td>
+          <td>${statusBadge(e.status)}${hasFutureRes(log, e.id)?`<span class="resv-ico" data-tt="${esc(e.id)}" title="Booked for later — view timetable">📅</span>`:""}</td>
         </tr>`).join("")}</tbody></table>`}
-        <p class="hint" style="text-align:left">View only — only available items can be borrowed from the Borrow tab.</p>`;
-      wireTagFilter("stCat", stCatTag, t => { stCatTag = t; studentPane(equipment, mine, inHand); });
-      wireTagFilter("stStat", stCatStatus, t => { stCatStatus = t; studentPane(equipment, mine, inHand); });
+        <p class="hint" style="text-align:left">View only. 📅 = booked for a future date; tap it to see the timetable.</p>`;
+      wireTagFilter("stCat", stCatTag, t => { stCatTag = t; studentPane(equipment, log, mine, inHand); });
+      wireTagFilter("stStat", stCatStatus, t => { stCatStatus = t; studentPane(equipment, log, mine, inHand); });
+      pane.querySelectorAll("[data-tt]").forEach(b => b.onclick = () => openTimetable(equipment.find(x => String(x.id) === String(b.dataset.tt)), log));
+    } else if (studentTab === "reserved") {
+      const rows = mine.filter(r => r.status === "Reserved").sort((a,b) => String(a.borrow_date).localeCompare(String(b.borrow_date)));
+      pane.innerHTML = rows.length === 0 ? `<div class="empty">No reservations. Pick a future date in the Borrow tab to reserve an item.</div>` : `
+        <table><thead><tr><th>Equipment</th><th>From</th><th>Until</th><th>Status</th><th></th></tr></thead><tbody>
+        ${rows.map(r => `<tr>
+          <td><b>${esc(r.equipment_name)}</b></td>
+          <td>${esc(r.borrow_date)}</td>
+          <td>${esc(r.return_date)}</td>
+          <td>${statusBadge(r.status)}</td>
+          <td class="actions"><button class="btn-danger btn-sm" data-cancel="${esc(r.id)}">Cancel</button></td>
+        </tr>`).join("")}</tbody></table>
+        <p class="hint" style="text-align:left">A reservation auto-becomes a borrow request on its start date.</p>`;
+      pane.querySelectorAll("[data-cancel]").forEach(b => b.onclick = () => {
+        if (!confirm("Cancel this reservation?")) return;
+        withSpin(b, () => cancelReservation(b.dataset.cancel));
+      });
     } else {
       const rows = [...mine].sort((a,b) => String(b.request_date).localeCompare(String(a.request_date)));
       pane.innerHTML = rows.length === 0 ? `<div class="empty">No history yet.</div>` : `
@@ -538,20 +575,56 @@
     }
   }
 
-  async function submitBorrow(e, equipment) {
+  async function submitBorrow(e, equipment, log) {
     e.preventDefault();
     const f = formData(e.target);
     if (f.return_date < f.borrow_date) return toast("Return date is before borrow date", "err");
     const s = getSession();
     const eq = equipment.find(x => String(x.id) === f.equipment_id);
+    // block overlapping bookings on this item (inclusive of the boundary day)
+    const conflicts = bookingsFor(log, f.equipment_id)
+      .filter(r => periodsOverlap(f.borrow_date, f.return_date, r.borrow_date, r.return_date));
+    if (conflicts.length) return openConflictModal(eq, conflicts);
+    const isFuture = f.borrow_date > today();
+    if (!isFuture && eq && eq.status !== "Available")
+      return toast("That item is out today — pick a future date to reserve it.", "err");
+    const status = isFuture ? "Reserved" : "Pending";
     const row = { id: Date.now().toString(), student_id:s.student_id, student_name:s.name,
       equipment_id:f.equipment_id, equipment_name: eq ? eq.name : "",
       borrow_date:f.borrow_date, return_date:f.return_date, request_date:today(),
-      status:"Pending", approved_by:"", actual_return_date:"", late:"FALSE" };
+      status, approved_by:"", actual_return_date:"", late:"FALSE" };
     await withSpin(e.submitter, async () => {
-      try { await DB.log.create(row); cacheUpsert("log", row); toast("Request submitted", "ok"); studentView(); }
+      try { await DB.log.create(row); cacheUpsert("log", row);
+        toast(isFuture ? `Reserved for ${f.borrow_date}` : "Request submitted", "ok"); studentView(); }
       catch (err) { invalidate("log"); toast("Submit failed", "err"); studentView(); }
     });
+  }
+
+  async function cancelReservation(id) {
+    try { await DB.log.update(id, { status:"Cancelled" }); cachePatch("log", id, { status:"Cancelled" });
+      toast("Reservation cancelled", "ok"); studentView(); }
+    catch (err) { invalidate("log"); toast("Failed", "err"); studentView(); }
+  }
+
+  // popups: a booking timetable for one item, and an overlap-conflict warning
+  function bookingTable(list) {
+    return `<table><thead><tr><th>Student</th><th>From</th><th>Until</th><th>Status</th></tr></thead><tbody>
+      ${list.map(r => `<tr>
+        <td>${esc(r.student_name)}</td><td>${esc(r.borrow_date)}</td>
+        <td>${esc(r.return_date)}${overdue(r.return_date)&&r.status!=="Reserved"?` <span class="badge b-late">overdue</span>`:""}</td>
+        <td>${statusBadge(r.status)}</td></tr>`).join("")}</tbody></table>`;
+  }
+  function openTimetable(eq, log) {
+    if (!eq) return;
+    const list = bookingsFor(log, eq.id);
+    openModal(`Timetable — ${eq.name}`, list.length
+      ? bookingTable(list)
+      : `<div class="empty">No active bookings for this item.</div>`);
+  }
+  function openConflictModal(eq, conflicts) {
+    openModal(`Time conflict — ${eq ? eq.name : "item"}`,
+      `<p class="sub" style="margin-bottom:12px">Those dates overlap an existing booking. Pick another period.</p>
+       ${bookingTable(conflicts)}`);
   }
 
   async function requestReturn(id) {
@@ -574,8 +647,13 @@
     categories = (cats && cats.length) ? cats.map(c => String(c.name)).filter(Boolean)
                                        : DEFAULT_CATEGORIES.slice();
     if (!categories.length) categories = DEFAULT_CATEGORIES.slice();
+    // client-side fallback for the daily Apps Script trigger: any reservation whose day has
+    // arrived becomes a Pending borrow request (idempotent; mutates the cached log in place)
+    await promoteDueReservations(log);
     const pending = log.filter(r => r.status === "Pending");
     const returns = log.filter(r => r.status === "ReturnRequested");
+    const reservedList = log.filter(r => r.status === "Reserved")
+      .sort((a,b) => String(a.borrow_date).localeCompare(String(b.borrow_date)));
     // items still out (held or return-pending) due back today or already overdue
     const dueList = log
       .filter(r => (r.status === "Approved" || r.status === "ReturnRequested")
@@ -584,7 +662,7 @@
     const studentsById = {};
     students.forEach(st => studentsById[String(st.student_id)] = st);
     const tabs = [["pending","Requests",pending.length],["returns","Returns",returns.length],
-      ["equipment","Equipment"],["students","Students"]];
+      ["reserved","Reserved",reservedList.length],["equipment","Equipment"],["students","Students"]];
     $app.innerHTML = `
       <div class="card">
         <h1>Admin console</h1>
@@ -636,6 +714,20 @@
           <td class="actions"><button class="btn-ok btn-sm" data-rok="${esc(r.id)}" data-eq="${esc(r.equipment_id)}" data-due="${esc(r.return_date)}">Approve return</button></td>
         </tr>`).join("")}</tbody></table>`;
       pane.querySelectorAll("[data-rok]").forEach(b => b.onclick = () => withSpin(b, () => approveReturn(b.dataset.rok, b.dataset.eq, b.dataset.due)));
+    } else if (adminTab === "reserved") {
+      const resv = log.filter(r => r.status === "Reserved").sort((a,b) => String(a.borrow_date).localeCompare(String(b.borrow_date)));
+      pane.innerHTML = resv.length === 0 ? `<div class="empty">No active reservations.</div>` : `
+        <table><thead><tr><th>Student</th><th>Equipment</th><th>From</th><th>Until</th><th>Actions</th></tr></thead><tbody>
+        ${resv.map(r => `<tr>
+          <td><b>${esc(r.student_name)}</b><br><span class="who" style="display:inline">${esc(r.student_id)}</span></td>
+          <td>${esc(r.equipment_name)}</td><td>${esc(r.borrow_date)}</td><td>${esc(r.return_date)}</td>
+          <td class="actions"><button class="btn-danger btn-sm" data-revoke="${esc(r.id)}">Revoke</button></td>
+        </tr>`).join("")}</tbody></table>
+        <p class="hint" style="text-align:left">Each reservation auto-becomes a Pending request on its start date.</p>`;
+      pane.querySelectorAll("[data-revoke]").forEach(b => b.onclick = () => {
+        if (!confirm("Revoke this reservation?")) return;
+        withSpin(b, () => revokeReservation(b.dataset.revoke));
+      });
     } else if (adminTab === "equipment") {
       const adFiltered = adCatTag !== "All" || adCatStatus !== "All";
       const list = equipment.filter(e => hasTag(e, adCatTag) && (adCatStatus === "All" || e.status === adCatStatus));
@@ -666,7 +758,7 @@
         ${list.map(e => `<tr data-id="${esc(e.id)}">
           <td><b>${esc(e.name)}</b></td><td>${esc(e.code)||"—"}</td><td>${esc(e.category)}</td>
           <td>${tagChips(e.tags)}</td>
-          <td>${statusBadge(e.status)}${e.status==="Borrowed" && holder[String(e.id)] ? `<div class="who" style="display:block;margin-top:3px">${esc(holder[String(e.id)])}</div>` : ""}</td>
+          <td>${statusBadge(e.status)}${hasFutureRes(log, e.id) ? `<span class="badge b-reserved resv-ico" data-tt="${esc(e.id)}" title="Booked for later — view timetable">Reserved</span>` : ""}${e.status==="Borrowed" && holder[String(e.id)] ? `<div class="who" style="display:block;margin-top:3px">${esc(holder[String(e.id)])}</div>` : ""}</td>
           <td class="actions">
             <button class="btn-sm" data-edit="${esc(e.id)}">Edit</button>
             <button class="btn-danger btn-sm" data-del="${esc(e.id)}">Delete</button></td>
@@ -675,6 +767,7 @@
       wireNewCat(document.getElementById("ef_cat"), document.getElementById("ef_newcat"));
       wireTagFilter("adCat", adCatTag, t => { adCatTag = t; adminPane(equipment, log, students, pending, returns); });
       wireTagFilter("adStat", adCatStatus, t => { adCatStatus = t; adminPane(equipment, log, students, pending, returns); });
+      pane.querySelectorAll("[data-tt]").forEach(b => b.onclick = () => openTimetable(equipment.find(x => String(x.id) === String(b.dataset.tt)), log));
       pane.querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
         if (!confirm("Delete this equipment from the catalog?")) return;
         withSpin(b, () => deleteEquipment(b.dataset.del));
@@ -725,6 +818,21 @@
     try { await DB.log.update(logId, { status:"Denied" }); cachePatch("log", logId, { status:"Denied" });
       toast("Denied", "ok"); adminView(); }
     catch (err) { invalidate("log"); toast("Failed", "err"); adminView(); }
+  }
+  async function revokeReservation(logId) {
+    try { await DB.log.update(logId, { status:"Revoked" }); cachePatch("log", logId, { status:"Revoked" });
+      toast("Reservation revoked", "ok"); adminView(); }
+    catch (err) { invalidate("log"); toast("Failed", "err"); adminView(); }
+  }
+  // client fallback for the daily Apps Script trigger: a reservation whose start date has
+  // arrived becomes a Pending borrow request. Idempotent; patches the cached log in place.
+  async function promoteDueReservations(log) {
+    const due = log.filter(r => r.status === "Reserved" && r.borrow_date && String(r.borrow_date) <= today());
+    if (!due.length) return;
+    try {
+      await Promise.all(due.map(r => DB.log.update(r.id, { status:"Pending", request_date: today() })));
+      due.forEach(r => cachePatch("log", r.id, { status:"Pending", request_date: today() }));
+    } catch (err) { invalidate("log"); }
   }
   async function approveReturn(logId, eqId, due) {
     const late = (due && today() > String(due)) ? "TRUE" : "FALSE";
