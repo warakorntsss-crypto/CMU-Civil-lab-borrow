@@ -167,7 +167,7 @@
   "use strict";
 
   // ---------- version ----------
-  const APP_VERSION = "2.2";
+  const APP_VERSION = "2.3";
   const verEl = document.getElementById("ver");
   if (verEl) verEl.textContent = "v" + APP_VERSION;
 
@@ -324,9 +324,15 @@
 
   // ---------- data cache ----------
   const cache = { equipment:null, log:null, students:null, categories:null };
+  const inflight = {};   // share one fetch when several callers ask for the same sheet at once
   async function load(name, force=false) {
-    if (!cache[name] || force) cache[name] = (await DB[name].getAll()).filter(r => r && r.id !== "");
-    return cache[name];
+    if (!force && cache[name]) return cache[name];
+    if (!inflight[name]) {
+      inflight[name] = DB[name].getAll()
+        .then(rows => (cache[name] = rows.filter(r => r && r.id !== "")))
+        .finally(() => { delete inflight[name]; });
+    }
+    return inflight[name];
   }
   const invalidate = (...names) => names.forEach(n => cache[n] = null);
   // optimistic cache edits — keep memory in sync with a successful write so the
@@ -386,12 +392,16 @@
     const f = formData(e.target);
     await withSpin(e.submitter, async () => {
       try {
+        // warm the dashboard's sheets in parallel while we authenticate
+        const warm = [load("equipment"), load("log"), load("categories").catch(()=>null)];
         const students = await load("students", true);
         const u = students.find(s => String(s.student_id) === f.student_id && String(s.password) === f.password);
         if (!u) return toast("Wrong ID or password", "err");
         const role = String(u.role).toLowerCase() === "admin" ? "admin" : "student";
         setSession({ student_id:String(u.student_id), name:u.name, role });
-        toast("Welcome, " + u.name, "ok"); route();
+        toast("Welcome, " + u.name, "ok");
+        await route();   // spinner stays until the dashboard is rendered; prefetch already in flight
+        void warm;
       } catch (err) { toast("Login failed — check your connection", "err"); }
     });
   }
@@ -401,13 +411,15 @@
     const f = formData(e.target);
     await withSpin(e.submitter, async () => {
       try {
+        const warm = [load("equipment"), load("log")];   // warm student dashboard while we create the account
         const students = await load("students", true);
         if (students.some(s => String(s.student_id) === f.student_id)) return toast("Student ID already registered", "err");
+        void warm;
         const row = { id: Date.now().toString(), student_id:f.student_id, password:f.password,
           name:f.name, tel:f.tel, advisor:f.advisor, role:"student" };
         await DB.students.create(row); cacheUpsert("students", row);
         setSession({ student_id:f.student_id, name:f.name, role:"student" });
-        toast("Account created", "ok"); route();
+        toast("Account created", "ok"); await route();
       } catch (err) { toast("Register failed — check your connection", "err"); }
     });
   }
@@ -555,10 +567,12 @@
   async function adminView() {
     const s = getSession();
     closeModal();   // drop any open popup so it can't show stale data after a re-render
-    const [equipment, log, students] = await Promise.all([load("equipment"), load("log"), load("students")]);
-    // categories load is non-fatal: if the sheet isn't there yet, fall back to defaults
-    try { const cats = await load("categories"); categories = cats.map(c => String(c.name)).filter(Boolean); }
-    catch { categories = DEFAULT_CATEGORIES.slice(); }
+    // all four sheets in one parallel batch; categories is non-fatal (falls back to defaults)
+    const [equipment, log, students, cats] = await Promise.all([
+      load("equipment"), load("log"), load("students"), load("categories").catch(() => null)
+    ]);
+    categories = (cats && cats.length) ? cats.map(c => String(c.name)).filter(Boolean)
+                                       : DEFAULT_CATEGORIES.slice();
     if (!categories.length) categories = DEFAULT_CATEGORIES.slice();
     const pending = log.filter(r => r.status === "Pending");
     const returns = log.filter(r => r.status === "ReturnRequested");
@@ -784,7 +798,9 @@
     if (!s) return authView("login");
     $who.innerHTML = `<b>${esc(s.name)}</b> · ${s.role === "admin" ? "Admin" : "Student"}`;
     $logout.hidden = false;
-    (s.role === "admin" ? adminView : studentView)().catch(() => toast("Could not load — is serve.py running?", "err"));
+    $app.innerHTML = `<div class="card" style="text-align:center;color:var(--muted)">${GEAR} Loading…</div>`;
+    return (s.role === "admin" ? adminView : studentView)()
+      .catch(() => toast("Could not load — check your connection", "err"));
   }
 
   $logout.onclick = () => { clearSession(); invalidate("equipment","log","students","categories"); route(); };

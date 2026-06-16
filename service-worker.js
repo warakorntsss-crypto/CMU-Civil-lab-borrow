@@ -1,7 +1,7 @@
 // Caches the app SHELL so it loads instantly / works offline. Data calls are
 // NEVER cached: any /api/ request and any cross-origin request (e.g. SheetDB
 // after launch) always go to the network so the data stays live.
-const CACHE = "lab-equipment-borrow-shell-v13";
+const CACHE = "lab-equipment-borrow-shell-v14";
 const SHELL = [
   "./", "./index.html", "./data.js", "./manifest.json",
   "./icon-192.png", "./icon-512.png"
