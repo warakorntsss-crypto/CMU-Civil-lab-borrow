@@ -81,6 +81,19 @@
   .stat.click:hover{box-shadow:0 1px 6px rgba(0,0,0,.10)}
   .stat.warn{background:#fff4e0}
   .stat.warn .n{color:var(--warn)}
+  /* student "active activity" mini-list under the stat boxes */
+  .act-list{margin-top:14px; border-top:1px solid var(--line); padding-top:4px}
+  .act-head{font-size:12px; color:var(--muted); font-weight:600; margin:8px 0 2px}
+  .act-row{display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:8px 2px; border-bottom:1px solid var(--line); font-size:13.5px}
+  .act-row:last-child{border-bottom:none}
+  .act-main{display:flex; align-items:center; gap:8px; min-width:0}
+  .act-main b{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .act-date{font-size:12.5px; color:var(--muted); white-space:nowrap}
+  .act-empty{color:var(--muted); justify-content:flex-start}
+  .act-see{width:100%; background:transparent; color:var(--accent); font-weight:600;
+    justify-content:center; cursor:pointer; padding:9px}
+  .act-see:hover{color:var(--ink)}
   /* modal popup overlay */
   .modal-overlay{position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex;
     align-items:flex-start; justify-content:center; padding:24px 12px; z-index:30; overflow:auto}
@@ -170,7 +183,7 @@
   "use strict";
 
   // ---------- version ----------
-  const APP_VERSION = "2.4";
+  const APP_VERSION = "2.5";
   const verEl = document.getElementById("ver");
   if (verEl) verEl.textContent = "v" + APP_VERSION;
 
@@ -459,6 +472,7 @@
         <h1>Hi, ${esc(s.name)}</h1>
         <p class="sub">Student ID ${esc(s.student_id)} · request equipment and track what you hold.</p>
         ${statBlock(mine)}
+        ${activityList(mine)}
       </div>
       <div class="card">
         <div class="tabs">${tabs.map(t =>
@@ -470,6 +484,7 @@
     document.getElementById("refreshBtn").onclick = e => withSpin(e.currentTarget, async () => {
       invalidate("equipment","log"); await studentView(); toast("Refreshed", "ok");
     });
+    document.getElementById("seeHistBtn").onclick = () => { studentTab = "history"; studentPane(equipment, log, mine, inHand); };
     studentPane(equipment, log, mine, inHand);
   }
 
@@ -484,6 +499,25 @@
       <div class="stat"><div class="n">${returned}</div><div class="l">Returned</div></div>
       <div class="stat ${late?"danger":""}"><div class="n">${late}</div><div class="l">Late</div></div>
     </div>`;
+  }
+
+  // compact at-a-glance list of the student's latest open/active items (under the stat boxes)
+  function activityList(mine) {
+    const ACTIVE = ["Pending","Reserved","Approved","ReturnRequested"];
+    const items = mine.filter(r => ACTIVE.includes(r.status))
+      .sort((a,b) => String(b.request_date).localeCompare(String(a.request_date))
+                  || String(b.id).localeCompare(String(a.id)))
+      .slice(0,3);
+    const dateOf = r => r.status === "Reserved" ? `from ${esc(r.borrow_date)}` : esc(r.request_date);
+    const rows = items.length
+      ? items.map(r => `<div class="act-row">
+          <span class="act-main">${statusBadge(r.status)} <b>${esc(r.equipment_name)}</b></span>
+          <span class="act-date">${dateOf(r)}</span></div>`).join("")
+      : `<div class="act-row act-empty">No active requests right now.</div>`;
+    return `<div class="act-list">
+      <div class="act-head">Active activity</div>
+      ${rows}
+      <button class="act-row act-see" id="seeHistBtn">See history →</button></div>`;
   }
 
   function studentPane(equipment, log, mine, inHand) {
