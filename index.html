@@ -69,11 +69,25 @@
   .b-returnreq{background:#f3e8ff; color:#8a3ffc}
   .b-returned{background:#e7f6ee; color:var(--ok)}
   .b-late{background:#fdecaa00; color:var(--danger); border:1px solid var(--danger); margin-left:6px}
-  .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:12px}
+  .stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px}
   .stat{background:var(--soft); border-radius:11px; padding:14px}
   .stat .n{font-size:24px; font-weight:700; letter-spacing:-.02em}
   .stat .l{font-size:12px; color:var(--muted); margin-top:2px}
   .stat.danger .n{color:var(--danger)}
+  .stat.click{cursor:pointer; transition:box-shadow .1s}
+  .stat.click:hover{box-shadow:0 1px 6px rgba(0,0,0,.10)}
+  .stat.warn{background:#fff4e0}
+  .stat.warn .n{color:var(--warn)}
+  /* modal popup overlay */
+  .modal-overlay{position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex;
+    align-items:flex-start; justify-content:center; padding:24px 12px; z-index:30; overflow:auto}
+  .modal{background:var(--bg); width:100%; max-width:640px; border-radius:14px; margin:auto;
+    box-shadow:0 12px 44px rgba(0,0,0,.22)}
+  .modal-head{display:flex; align-items:center; gap:10px; padding:15px 18px; border-bottom:1px solid var(--line)}
+  .modal-head h2{margin:0; flex:1; font-size:16px}
+  .modal-close{background:transparent; color:var(--muted); font-size:20px; line-height:1; padding:4px 8px}
+  .modal-close:hover{color:var(--ink)}
+  .modal-body{padding:14px 18px 18px; overflow-x:auto}
   .empty{text-align:center; color:var(--muted); padding:30px 10px; font-size:14px}
   .tag{display:inline-block; font-size:11px; font-weight:600; padding:1px 8px; border-radius:20px;
     background:#eef1f6; color:#5a6b8c; margin:1px 4px 1px 0; white-space:nowrap}
@@ -131,6 +145,8 @@
     #pane > table{min-width:560px}   /* keep columns legible; pane scrolls */
     table.inner{min-width:0}
     #status{left:16px; right:16px; transform:none; text-align:center}
+    .modal-overlay{padding:10px}
+    .modal-body > table{min-width:520px}   /* 6-col due list side-scrolls instead of squishing */
   }
 </style>
 </head>
@@ -151,7 +167,7 @@
   "use strict";
 
   // ---------- version ----------
-  const APP_VERSION = "2.1";
+  const APP_VERSION = "2.2";
   const verEl = document.getElementById("ver");
   if (verEl) verEl.textContent = "v" + APP_VERSION;
 
@@ -179,6 +195,48 @@
     $status.textContent = msg; $status.className = "show " + kind;
     clearTimeout(toastT);
     if (kind !== "") toastT = setTimeout(() => $status.className = "", 1600);
+  }
+
+  // ---------- modal popup (reusable) ----------
+  let modalEsc = null;
+  function closeModal() {
+    const o = document.getElementById("modalOverlay");
+    if (o) o.remove();
+    if (modalEsc) { document.removeEventListener("keydown", modalEsc); modalEsc = null; }
+  }
+  function openModal(title, bodyHtml) {
+    closeModal();
+    const o = document.createElement("div");
+    o.id = "modalOverlay"; o.className = "modal-overlay";
+    o.innerHTML = `<div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h2>${esc(title)}</h2>
+        <button class="modal-close" id="modalClose" aria-label="Close">✕</button></div>
+      <div class="modal-body">${bodyHtml}</div></div>`;
+    document.body.appendChild(o);
+    o.addEventListener("click", e => { if (e.target === o) closeModal(); });   // backdrop
+    o.querySelector("#modalClose").onclick = closeModal;
+    modalEsc = e => { if (e.key === "Escape") closeModal(); };
+    document.addEventListener("keydown", modalEsc);
+  }
+
+  // popup: equipment due today or overdue, with who holds it + contact
+  function openDueModal(list, studentsById) {
+    if (!list || list.length === 0) return toast("Nothing due today 🎉", "ok");
+    const rows = list.map(r => {
+      const st = studentsById[String(r.student_id)] || {};
+      const od = overdue(r.return_date);
+      return `<tr>
+        <td><b>${esc(r.equipment_name)}</b></td>
+        <td>${esc(r.student_name)}<br><span class="who" style="display:inline">${esc(r.student_id)}</span></td>
+        <td>${esc(r.borrow_date)}</td>
+        <td>${esc(r.return_date)}${od?` <span class="badge b-late">overdue</span>`:` <span class="badge b-pending">today</span>`}</td>
+        <td>${esc(st.tel) || "—"}</td>
+        <td>${esc(st.advisor) || "—"}</td>
+      </tr>`;
+    }).join("");
+    openModal(`Return due — ${list.length} item${list.length>1?"s":""}`,
+      `<table><thead><tr><th>Equipment</th><th>Student</th><th>Borrowed</th><th>Due</th><th>Tel</th><th>Advisor</th></tr></thead>
+       <tbody>${rows}</tbody></table>`);
   }
 
   // ---------- button loading spinner (spinning gear) ----------
@@ -496,6 +554,7 @@
   let adCatStatus = "All"; // status filter on the admin equipment catalog
   async function adminView() {
     const s = getSession();
+    closeModal();   // drop any open popup so it can't show stale data after a re-render
     const [equipment, log, students] = await Promise.all([load("equipment"), load("log"), load("students")]);
     // categories load is non-fatal: if the sheet isn't there yet, fall back to defaults
     try { const cats = await load("categories"); categories = cats.map(c => String(c.name)).filter(Boolean); }
@@ -503,6 +562,13 @@
     if (!categories.length) categories = DEFAULT_CATEGORIES.slice();
     const pending = log.filter(r => r.status === "Pending");
     const returns = log.filter(r => r.status === "ReturnRequested");
+    // items still out (held or return-pending) due back today or already overdue
+    const dueList = log
+      .filter(r => (r.status === "Approved" || r.status === "ReturnRequested")
+                && r.return_date && String(r.return_date) <= today())
+      .sort((a,b) => String(a.return_date).localeCompare(String(b.return_date)));
+    const studentsById = {};
+    students.forEach(st => studentsById[String(st.student_id)] = st);
     const tabs = [["pending","Requests",pending.length],["returns","Returns",returns.length],
       ["equipment","Equipment"],["students","Students"]];
     $app.innerHTML = `
@@ -514,6 +580,8 @@
           <div class="stat"><div class="n">${equipment.filter(e=>e.status==="Borrowed").length}</div><div class="l">Out on loan</div></div>
           <div class="stat ${pending.length?"danger":""}"><div class="n">${pending.length}</div><div class="l">Pending</div></div>
           <div class="stat"><div class="n">${returns.length}</div><div class="l">Return reqs</div></div>
+          <div class="stat click ${dueList.length?"warn":""}" id="dueBox" title="Equipment due back today or overdue — click for the list">
+            <div class="n">${dueList.length}</div><div class="l">Return due ▸</div></div>
         </div>
       </div>
       <div class="card">
@@ -526,6 +594,7 @@
     document.getElementById("refreshBtn").onclick = e => withSpin(e.currentTarget, async () => {
       invalidate("equipment","log","students","categories"); await adminView(); toast("Refreshed", "ok");
     });
+    document.getElementById("dueBox").onclick = () => openDueModal(dueList, studentsById);
     adminPane(equipment, log, students, pending, returns);
   }
 
